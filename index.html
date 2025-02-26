@@ -25,10 +25,27 @@
             box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
         }
         h1 {
-            font-size: 2.5em;
-            margin-bottom: 20px;
-            font-weight: bold;
-            text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+            font-size: 1.5rem; /* 24px, эквивалент text-2xl */
+            font-weight: 600; /* Полужирный, эквивалент font-semibold */
+            letter-spacing: -0.025em; /* Уменьшенный интервал, эквивалент tracking-tighter */
+            margin-bottom: 1.5rem; /* 24px, эквивалент mb-6 */
+            color: #f4f4f5; /* Эквивалент text-zinc-100 */
+        }
+        @media (min-width: 768px) { /* Для md и выше (≥768px) */
+            h1 {
+                font-size: 3.75rem; /* 60px, эквивалент md:text-6xl */
+                font-weight: 700; /* Жирный, эквивалент md:font-bold */
+            }
+        }
+        h1 span.by {
+            display: inline-block;
+            margin: 0 1rem; /* 16px, эквивалент mx-4 */
+            color: #d4d4d8; /* Эквивалент text-zinc-300 */
+        }
+        h1 span.brand {
+            display: inline-block;
+            transform: skewX(-6deg); /* Наклон на -6 градусов, эквивалент -skew-x-6 */
+            color: #3b82f6; /* Эквивалент text-blue-500 */
         }
         .wallet-options, .connected-options {
             margin: 20px 0;
@@ -75,7 +92,11 @@
 </head>
 <body>
     <div class="container">
-        <h1 className="text-2xl md:text-6xl font-semibold md:font-bold tracking-tighter mb-6 text-zinc-100">Monad Testnet Faucet</h1>
+        <h1>
+            Monad Community Faucet
+            <span class="by">by</span>
+            <span class="brand">ggwp.tech</span>
+        </h1>
         <div id="wallet-options" class="wallet-options">
             <button id="connectMetaMaskBtn" onclick="connectMetaMask()">Connect MetaMask</button>
         </div>
@@ -87,7 +108,7 @@
     </div>
 
     <script>
-        const contractAddress = "0xCD31C18B81BC18DEBF5B6AF2952769C7c32449f5";
+        const contractAddress = "0x22Cf0928728d491c0DBb468D65F5B4BDc1E058e0";
         const abi = [
             {
                 "inputs": [],
@@ -350,14 +371,18 @@
             try {
                 console.log("Requesting tokens for:", userAddress);
                 document.getElementById("status").innerText = "Requesting tokens...";
-                await contract.methods.requestTokens().send({ from: userAddress })
+                await contract.methods.requestTokens().send({
+                    from: userAddress,
+                    gas: 50000,
+                    gasPrice: await web3.eth.getGasPrice()
+                })
                     .on('receipt', (receipt) => {
                         console.log("Transaction receipt:", receipt);
                         document.getElementById("status").innerText = "Success! 0.1 MON sent to your wallet.";
                     })
                     .on('error', (error) => {
                         console.error("Transaction error:", error);
-                        document.getElementById("status").innerText = "Error: " + error.message;
+                        document.getElementById("status").innerText = "Error: " + (error.message || "Transaction failed");
                     });
             } catch (error) {
                 console.error("Error requesting tokens:", error);
