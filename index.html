@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Monad Testnet Faucet</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.jsdelivr.net/npm/web3@1.10.0/dist/web3.min.js"></script>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #000000; /* Чёрный фон */
+            color: #ffffff; /* Белый текст */
+        }
+        .container {
+            text-align: center;
+            padding: 20px;
+            border-radius: 15px;
+            background: rgba(255, 255, 255, 0.05); /* Лёгкая прозрачность для контраста */
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+        }
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 20px;
+            font-weight: bold;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+        }
+        .wallet-options, .connected-options {
+            margin: 20px 0;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        button {
+            padding: 12px 24px;
+            font-size: 1em;
+            cursor: pointer;
+            border: none;
+            border-radius: 25px;
+            transition: transform 0.2s, background-color 0.3s;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        }
+        button:hover {
+            transform: scale(1.05);
+            filter: brightness(120%);
+        }
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+            filter: none;
+        }
+        #connectMetaMaskBtn {
+            background-color: #4CAF50; /* Зелёный для MetaMask */
+            color: white;
+        }
+        #disconnectBtn, #requestBtn {
+            background-color: #ffffff;
+            color: #000000;
+        }
+        .hidden {
+            display: none;
+        }
+        #status {
+            margin-top: 20px;
+            font-size: 1.1em;
+            color: #a0a0a0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Monad Testnet Faucet</h1>
+        <div id="wallet-options" class="wallet-options">
+            <button id="connectMetaMaskBtn" onclick="connectMetaMask()">Connect MetaMask</button>
+        </div>
+        <div id="connected-options" class="connected-options hidden">
+            <button id="disconnectBtn" onclick="disconnectWallet()" disabled>Disconnect Wallet</button>
+            <button id="requestBtn" onclick="requestTokens()" disabled>Request 0.1 MON</button>
+        </div>
+        <p id="status"></p>
+    </div>
+
+    <script>
+        const contractAddress = "0x22Cf0928728d491c0DBb468D65F5B4BDc1E058e0";
+        const abi = [
+            {
+                "inputs": [],
+                "name": "deposit",
+                "outputs": [],
+                "stateMutability": "payable",
+                "type": "function"
+            },
+            {
+                "inputs": [],
+                "name": "requestTokens",
+                "outputs": [],
+                "stateMutability": "nonpayable",
+                "type": "function"
+            },
+            {
+                "inputs": [],
+                "stateMutability": "nonpayable",
+                "type": "constructor"
+            },
+            {
+                "anonymous": false,
+                "inputs": [
+                    {
+                        "indexed": true,
+                        "internalType": "address",
+                        "name": "to",
+                        "type": "address"
+                    },
+                    {
+                        "indexed": false,
+                        "internalType": "uint256",
+                        "name": "amount",
+                        "type": "uint256"
+                    }
+                ],
+                "name": "Withdrawal",
+                "type": "event"
+            },
+            {
+                "inputs": [],
+                "name": "withdrawAll",
+                "outputs": [],
+                "stateMutability": "nonpayable",
+                "type": "function"
+            },
+            {
+                "stateMutability": "payable",
+                "type": "receive"
+            },
+            {
+                "inputs": [],
+                "name": "getBalance",
+                "outputs": [
+                    {
+                        "internalType": "uint256",
+                        "name": "",
+                        "type": "uint256"
+                    }
+                ],
+                "stateMutability": "view",
+                "type": "function"
+            },
+            {
+                "inputs": [
+                    {
+                        "internalType": "address",
+                        "name": "",
+                        "type": "address"
+                    }
+                ],
+                "name": "lastAccessTime",
+                "outputs": [
+                    {
+                        "internalType": "uint256",
+                        "name": "",
+                        "type": "uint256"
+                    }
+                ],
+                "stateMutability": "view",
+                "type": "function"
+            },
+            {
+                "inputs": [],
+                "name": "lockTime",
+                "outputs": [
+                    {
+                        "internalType": "uint256",
+                        "name": "",
+                        "type": "uint256"
+                    }
+                ],
+                "stateMutability": "view",
+                "type": "function"
+            },
+            {
+                "inputs": [],
+                "name": "owner",
+                "outputs": [
+                    {
+                        "internalType": "address",
+                        "name": "",
+                        "type": "address"
+                    }
+                ],
+                "stateMutability": "view",
+                "type": "function"
+            },
+            {
+                "inputs": [],
+                "name": "withdrawalAmount",
+                "outputs": [
+                    {
+                        "internalType": "uint256",
+                        "name": "",
+                        "type": "uint256"
+                    }
+                ],
+                "stateMutability": "view",
+                "type": "function"
+            }
+        ];
+
+        let web3;
+        let contract;
+        let userAddress;
+        let walletProvider;
+
+        const MONAD_TESTNET_CHAIN_ID = "0x279f"; // Chain ID 10143 в hex
+
+        // Слушаем события изменения аккаунтов и отключения
+        window.addEventListener('load', () => {
+            if (window.ethereum) {
+                window.ethereum.on('accountsChanged', handleAccountsChanged);
+                window.ethereum.on('disconnect', handleDisconnect);
+            }
+        });
+
+        function handleAccountsChanged(accounts) {
+            if (accounts.length === 0) {
+                disconnectWallet();
+            } else {
+                userAddress = accounts[0];
+                console.log("Account changed:", userAddress);
+                document.getElementById("status").innerText = `Connected: ${userAddress}`;
+                document.getElementById("requestBtn").disabled = false;
+                document.getElementById("disconnectBtn").disabled = false;
+            }
+        }
+
+        function handleDisconnect() {
+            console.log("Wallet disconnected by provider.");
+            disconnectWallet();
+        }
+
+        async function connectMetaMask() {
+            try {
+                if (window.ethereum) {
+                    walletProvider = window.ethereum;
+                    web3 = new Web3(walletProvider);
+                    await connectWalletCommon();
+                } else {
+                    throw new Error("MetaMask not detected. Please install MetaMask!");
+                }
+            } catch (error) {
+                console.error("Error connecting MetaMask:", error);
+                document.getElementById("status").innerText = "Error connecting MetaMask: " + error.message;
+            }
+        }
+
+        async function connectWalletCommon() {
+            const chainId = await web3.eth.getChainId();
+            console.log("Current chain ID:", chainId);
+
+            if (chainId !== parseInt(MONAD_TESTNET_CHAIN_ID, 16)) {
+                try {
+                    await walletProvider.request({
+                        method: 'wallet_addEthereumChain',
+                        params: [{
+                            chainId: MONAD_TESTNET_CHAIN_ID,
+                            chainName: 'Monad Testnet',
+                            nativeCurrency: {
+                                name: 'MON',
+                                symbol: 'MON',
+                                decimals: 18
+                            },
+                            rpcUrls: ['https://testnet-rpc.monad.xyz'],
+                            blockExplorerUrls: ['https://testnet.monadexplorer.com']
+                        }]
+                    });
+                } catch (addError) {
+                    console.error("Error adding Monad Testnet:", addError);
+                    document.getElementById("status").innerText = "Error adding Monad Testnet: " + addError.message;
+                    return;
+                }
+            }
+
+            await walletProvider.request({ method: 'eth_requestAccounts' });
+            const accounts = await web3.eth.getAccounts();
+            userAddress = accounts[0];
+            contract = new web3.eth.Contract(abi, contractAddress);
+
+            const currentChainId = await web3.eth.getChainId();
+            if (currentChainId !== parseInt(MONAD_TESTNET_CHAIN_ID, 16)) {
+                await walletProvider.request({
+                    method: 'wallet_switchEthereumChain',
+                    params: [{ chainId: MONAD_TESTNET_CHAIN_ID }],
+                });
+            }
+
+            document.getElementById("wallet-options").classList.add("hidden");
+            document.getElementById("connected-options").classList.remove("hidden");
+
+            document.getElementById("status").innerText = `Connected: ${userAddress}`;
+            document.getElementById("requestBtn").disabled = false;
+            document.getElementById("disconnectBtn").disabled = false;
+        }
+
+        async function disconnectWallet() {
+            console.log("Attempting to disconnect wallet...");
+            if (walletProvider) {
+                try {
+                    if (walletProvider.disconnect) {
+                        await walletProvider.disconnect();
+                    }
+                    if (walletProvider.resetState) {
+                        await walletProvider.resetState();
+                        console.log("Provider state reset for disconnect.");
+                    }
+
+                    web3 = null;
+                    contract = null;
+                    userAddress = null;
+                    walletProvider = null;
+
+                    document.getElementById("connected-options").classList.add("hidden");
+                    document.getElementById("wallet-options").classList.remove("hidden");
+
+                    document.getElementById("requestBtn").disabled = true;
+                    document.getElementById("disconnectBtn").disabled = true;
+
+                    document.getElementById("status").innerText = "Wallet disconnected. Please connect again to continue.";
+                    console.log("Wallet disconnected successfully.");
+                } catch (error) {
+                    console.error("Error disconnecting wallet:", error);
+                    document.getElementById("status").innerText = "Error disconnecting wallet: " + error.message;
+                }
+            } else {
+                console.log("No wallet provider available.");
+                document.getElementById("status").innerText = "No wallet provider available.";
+            }
+        }
+
+        async function requestTokens() {
+            if (!web3 || !contract || !userAddress) {
+                console.log("Wallet not connected.");
+                document.getElementById("status").innerText = "Please connect your wallet first!";
+                return;
+            }
+            try {
+                console.log("Requesting tokens for:", userAddress);
+                document.getElementById("status").innerText = "Requesting tokens...";
+                await contract.methods.requestTokens().send({ from: userAddress })
+                    .on('receipt', (receipt) => {
+                        console.log("Transaction receipt:", receipt);
+                        document.getElementById("status").innerText = "Success! 0.1 MON sent to your wallet.";
+                    })
+                    .on('error', (error) => {
+                        console.error("Transaction error:", error);
+                        document.getElementById("status").innerText = "Error: " + error.message;
+                    });
+            } catch (error) {
+                console.error("Error requesting tokens:", error);
+                document.getElementById("status").innerText = "Error requesting tokens: " + error.message;
+            }
+        }
+    </script>
+</body>
+</html>
