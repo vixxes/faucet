@@ -62,7 +62,7 @@
             box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
             min-height: 36px; /* Фиксированная минимальная высота */
             max-width: 180px; /* Ограничиваем максимальную ширину кнопки */
-            width: fit-content; /* Ширина подстраивается под содержимое, но не растягивается */
+            width: fit-content; /* Ширина подстраивается под содержимое */
         }
         button:hover {
             transform: scale(1.05);
@@ -384,11 +384,21 @@
                     })
                     .on('error', (error) => {
                         console.error("Transaction error:", error);
-                        document.getElementById("status").innerText = "Error: " + (error.message || "Transaction failed");
+                        // Проверяем, связано ли отклонение с ограничением времени
+                        if (error.message.includes("Wait 24 hours before next request")) {
+                            document.getElementById("status").innerText = "You already requested tokens. Please wait 24 hours before requesting again.";
+                        } else {
+                            document.getElementById("status").innerText = "Error: Transaction failed. Please try again.";
+                        }
                     });
             } catch (error) {
                 console.error("Error requesting tokens:", error);
-                document.getElementById("status").innerText = "Error requesting tokens: " + error.message;
+                // Проверяем, связано ли отклонение с ограничением времени
+                if (error.message.includes("Wait 24 hours before next request")) {
+                    document.getElementById("status").innerText = "You already requested tokens. Please wait 24 hours before requesting again.";
+                } else {
+                    document.getElementById("status").innerText = "Error requesting tokens: " + error.message;
+                }
             }
         }
     </script>
